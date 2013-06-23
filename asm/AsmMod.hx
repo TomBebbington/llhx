@@ -42,6 +42,12 @@ class AsmMod {
 			}
 		}
 	}
+	static function toBlock(e:Expr):Expr {
+		return switch(e.expr) {
+			case EBlock(_): e;
+			default: {expr: EBlock([e]), pos: e.pos};
+		}
+	}
 	public function genAsm(e:Expr, ?locals:Array<Var>, annot:Bool=false):String {
 		if(locals == null)
 			locals = [];
@@ -72,13 +78,19 @@ class AsmMod {
 						default:
 					}
 				}
-				'function $name($args) {$asserts${genAsm(f.expr, locals, true)}};';
+				var aexprs = switch(f.expr.expr) {
+					case EBlock(exprs): exprs;
+					default: [f.expr];
+				}
+				var asm = [for(ex in aexprs) genAsm(ex, locals) + ";"].join("");
+				'function $name($args) {$asserts$asm}';
 			case EBlock(exprs):
 				"{" + [for(ex in exprs) genAsm(ex, locals) + ";"].join("") + "}";
-			case EReturn(exp): "return " + genAsm(exp, locals);
+			case EReturn(exp): "return " + genAsm(exp, locals, true);
 			case ECall(exp, ps): genAsm(exp, locals) + "(" + [for(p in ps) genAsm(p, locals, true)].join(", ") + ")";
 			case EConst(CIdent(b)): b;
 			case EConst(CInt(v)): '$v';
+			case EConst(CFloat(f)): f;
 			case EField({expr: EConst(CIdent(ident)), pos: _}, field):
 				var name = 'std.$ident.$field';
 				var ref = null;
@@ -110,7 +122,7 @@ class AsmMod {
 				'for($i=$a;$i<$b;$i++)${genAsm(expr, llocals)}';
 			case EBinop(OpAssign, a, b): genAsm(a, locals) + "=" + genAsm(b, locals, true);
 			case EBinop(OpAssignOp(op), a, b): genAsm(a, locals) + getOp(op) + "=" + genAsm(b, locals, true);
-			case EBinop(op, a, b): genAsm(a, locals, true) + getOp(op) + genAsm(b, locals, true);
+			case EBinop(op, a, b): genAsm(a, locals) + getOp(op) + genAsm(b, locals);
 			default: trace(e.expr); "";
 		};
 		return !annot ? as : StringTools.replace(format, "$", as); 
@@ -143,7 +155,7 @@ class AsmMod {
 	}
 	public function toString() {
 		var s = new StringBuf();
-		s.add("(function(std, foreign, heap) {");
+		s.add("(function(std, ext, heap) {");
 		s.add("\"use asm\";");
 		var genFuncs = [for(f in functions.keys()) {
 			var v = functions.get(f);
