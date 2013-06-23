@@ -1,0 +1,1 @@
+This is an attempt to be able to compile specific Haxe classes into 'asm.js' code using a haxelib. Note that it is currently unstable.

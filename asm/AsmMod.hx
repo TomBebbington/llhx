@@ -51,7 +51,7 @@ class AsmMod {
 			case Failure(info): throw '$info in ${e.expr} with $locals';
 			default: "$";
 		};
-		var typed = annot && format.length > 1;
+		//var typed = annot && format.length > 1;
 		var as = switch(e.expr) {
 			case EFunction(name, f) if(name == null):
 				throw "No anonymous functions allowed in ASM";
@@ -108,9 +108,9 @@ class AsmMod {
 					expr: null
 				});
 				'for($i=$a;$i<$b;$i++)${genAsm(expr, llocals)}';
-			case EBinop(OpAssign, a, b): genAsm(a, locals) + "=" + genAsm(b, locals, typed);
-			case EBinop(OpAssignOp(op), a, b): genAsm(a, locals) + getOp(op) + "=" + genAsm(b, locals, typed);
-			case EBinop(op, a, b): genAsm(a, locals, typed) + getOp(op) + genAsm(b, locals, typed);
+			case EBinop(OpAssign, a, b): genAsm(a, locals) + "=" + genAsm(b, locals, true);
+			case EBinop(OpAssignOp(op), a, b): genAsm(a, locals) + getOp(op) + "=" + genAsm(b, locals, true);
+			case EBinop(op, a, b): genAsm(a, locals, true) + getOp(op) + genAsm(b, locals, true);
 			default: trace(e.expr); "";
 		};
 		return !annot ? as : StringTools.replace(format, "$", as); 
