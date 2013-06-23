@@ -1,0 +1,10 @@
+{
+	"name" : "asm",
+	"url" : "https://github.com/tophattedcoder/asm",
+	"license" : "BSD",
+	"description" : "Support for ASM for a subset of Haxe code",
+	"version" : "0.0.1",
+	"releasenote" : "Initial release",
+	"contributors" : ["tophattedcoder"],
+	"dependencies" : {}
+}
