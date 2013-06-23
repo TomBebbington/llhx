@@ -5,7 +5,7 @@ Std.parseFloat = function(x) {
 }
 var Testy = function() { }
 Testy.asm = function() {
-	return (function(std, ext, heap) {"use asm";var _c = std.Math.sqrt;var _d = std.Math.pow;function _a(n) {n = +n;return +(n*n);}function _b(x, y) {x = +x;y = +y;return +_c(+(_d(+x, +2.0)+_d(+y, +2.0)));}return {square: _a, diag: _b};})(window);
+	return (function(std, ext, heap) {"use asm";function _a(b) {b = b|0;var a = 0|0;;for(i=1;i<b;i++)a+=b|0;return a|0;}return {diag: _a};})(window);
 }
 var Test = function() { }
 Test.main = function() {

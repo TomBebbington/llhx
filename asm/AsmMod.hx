@@ -8,6 +8,7 @@ class AsmMod {
 	public var globals:Map<String, String>;
 	public var functions:Map<String, Function>;
 	public var functionIds:Map<String, String>;
+	var locals:Array<Var>;
 	var idn:Int;
 	function genId(x:Int=-1):String {
 		if(x < 0)
@@ -48,9 +49,7 @@ class AsmMod {
 			default: {expr: EBlock([e]), pos: e.pos};
 		}
 	}
-	public function genAsm(e:Expr, ?locals:Array<Var>, annot:Bool=false):String {
-		if(locals == null)
-			locals = [];
+	public function genAsm(e:Expr, annot:Bool=false):String {
 		var complic = true;
 		var as = switch(e.expr) {
 			case EFunction(name, f) if(name == null):
@@ -76,15 +75,24 @@ class AsmMod {
 					case EBlock(exprs): exprs;
 					default: [f.expr];
 				}
-				var asm = [for(ex in aexprs) genAsm(ex, locals) + ";"].join("");
+				var asm = [for(ex in aexprs) genAsm(ex) + ";"].join("");
 				'function $name($args) {$asserts$asm}';
 			case EBlock(exprs): complic = false;
-				"{" + [for(ex in exprs) genAsm(ex, locals) + ";"].join("") + "}";
-			case EReturn(exp): "return " + genAsm(exp, locals, true);
-			case ECall(exp, ps): complic = false; genAsm(exp, locals) + "(" + [for(p in ps) genAsm(p, locals, true)].join(", ") + ")";
+				"{" + [for(ex in exprs) genAsm(ex) + ";"].join("") + "}";
+			case EReturn(exp): "return " + genAsm(exp, true);
+			case ECall(exp, ps): complic = false; genAsm(exp) + "(" + [for(p in ps) genAsm(p, true)].join(", ") + ")";
 			case EConst(CIdent(b)): complic = false; b;
 			case EConst(CInt(v)): complic = false; '$v';
 			case EConst(CFloat(f)): complic = false; f;
+			case EConst(CString(s)): "[" + [for(i in 0...s.length) s.charCodeAt(i)].join(", ") + "]";
+			case EVars(vars): 
+				locals = locals.concat(vars);
+				[for(v in vars) {
+					var s = 'var ${v.name}';
+					if(v.expr != null)
+						s += " = " + genAsm(v.expr, true);
+					s += ";";
+				}].join("");
 			case EField({expr: EConst(CIdent(ident)), pos: _}, field):
 				var name = 'std.$ident.$field';
 				var ref = null;
@@ -102,9 +110,8 @@ class AsmMod {
 					id;
 				}
 			case EFor({expr:EIn({expr:EConst(CIdent(i)), pos: _}, {expr: EBinop(OpInterval, ea, eb), pos: _}), pos: _}, expr):
-				var a = genAsm(ea, locals), b = genAsm(eb, locals);
-				var llocals = locals.copy();
-				llocals.push({
+				var a = genAsm(ea), b = genAsm(eb);
+				var tlocal = {
 					type: TPath({
 						params: [],
 						pack: [],
@@ -112,17 +119,22 @@ class AsmMod {
 					}),
 					name: i,
 					expr: null
-				});
-				'for($i=$a;$i<$b;$i++)${genAsm(expr, llocals)}';
-			case EBinop(OpAssign, a, b): genAsm(a, locals) + "=" + genAsm(b, locals, true);
-			case EBinop(OpAssignOp(op), a, b): genAsm(a, locals) + getOp(op) + "=" + genAsm(b, locals, true);
-			case EBinop(op, a, b): genAsm(a, locals) + getOp(op) + genAsm(b, locals);
+				};
+				locals.push(tlocal);
+				var s = 'for($i=$a;$i<$b;$i++)${genAsm(expr)}';
+				locals.remove(tlocal);
+				s;
+			case EBinop(OpAssign, a, b): genAsm(a) + "=" + genAsm(b, true);
+			case EBinop(OpAssignOp(op), a, b): genAsm(a) + getOp(op) + "=" + genAsm(b, true);
+			case EBinop(op, a, b): genAsm(a) + getOp(op) + genAsm(b);
 			default: trace(e.expr); "";
 		};
 		var format = switch(e.typeof(locals)) {
 			case Success(TAbstract(t, params)) if(t.get().name == "Int"): complic ? "($)|0" : "$|0";
 			case Success(TAbstract(t, params)) if(t.get().name == "Float"): complic ? "+($)" : "+$";
-			case Failure(info): throw '$info in ${e.expr} with $locals';
+			case Failure(info): 
+				var localss = [for(l in locals) l.name].join(", ");
+				throw '$info in ${e.expr} with $localss';
 			default: "$";
 		};
 		return !annot ? as : StringTools.replace(format, "$", as); 
@@ -159,6 +171,7 @@ class AsmMod {
 		s.add("\"use asm\";");
 		var genFuncs = [for(f in functions.keys()) {
 			var v = functions.get(f);
+			locals = [];
 			genAsm({expr: EFunction(f, v), pos: Context.currentPos()});
 		}];
 		for(k in globals.keys()) {
