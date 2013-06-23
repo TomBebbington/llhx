@@ -51,13 +51,7 @@ class AsmMod {
 	public function genAsm(e:Expr, ?locals:Array<Var>, annot:Bool=false):String {
 		if(locals == null)
 			locals = [];
-		var format = switch(e.typeof(locals)) {
-			case Success(TAbstract(t, params)) if(t.get().name == "Int"): "($)|0";
-			case Success(TAbstract(t, params)) if(t.get().name == "Float"): "+$";
-			case Failure(info): throw '$info in ${e.expr} with $locals';
-			default: "$";
-		};
-		//var typed = annot && format.length > 1;
+		var complic = true;
 		var as = switch(e.expr) {
 			case EFunction(name, f) if(name == null):
 				throw "No anonymous functions allowed in ASM";
@@ -84,13 +78,13 @@ class AsmMod {
 				}
 				var asm = [for(ex in aexprs) genAsm(ex, locals) + ";"].join("");
 				'function $name($args) {$asserts$asm}';
-			case EBlock(exprs):
+			case EBlock(exprs): complic = false;
 				"{" + [for(ex in exprs) genAsm(ex, locals) + ";"].join("") + "}";
 			case EReturn(exp): "return " + genAsm(exp, locals, true);
-			case ECall(exp, ps): genAsm(exp, locals) + "(" + [for(p in ps) genAsm(p, locals, true)].join(", ") + ")";
-			case EConst(CIdent(b)): b;
-			case EConst(CInt(v)): '$v';
-			case EConst(CFloat(f)): f;
+			case ECall(exp, ps): complic = false; genAsm(exp, locals) + "(" + [for(p in ps) genAsm(p, locals, true)].join(", ") + ")";
+			case EConst(CIdent(b)): complic = false; b;
+			case EConst(CInt(v)): complic = false; '$v';
+			case EConst(CFloat(f)): complic = false; f;
 			case EField({expr: EConst(CIdent(ident)), pos: _}, field):
 				var name = 'std.$ident.$field';
 				var ref = null;
@@ -124,6 +118,12 @@ class AsmMod {
 			case EBinop(OpAssignOp(op), a, b): genAsm(a, locals) + getOp(op) + "=" + genAsm(b, locals, true);
 			case EBinop(op, a, b): genAsm(a, locals) + getOp(op) + genAsm(b, locals);
 			default: trace(e.expr); "";
+		};
+		var format = switch(e.typeof(locals)) {
+			case Success(TAbstract(t, params)) if(t.get().name == "Int"): complic ? "($)|0" : "$|0";
+			case Success(TAbstract(t, params)) if(t.get().name == "Float"): complic ? "+($)" : "+$";
+			case Failure(info): throw '$info in ${e.expr} with $locals';
+			default: "$";
 		};
 		return !annot ? as : StringTools.replace(format, "$", as); 
 	}
