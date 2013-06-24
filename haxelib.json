@@ -1,8 +1,8 @@
 {
-	"name" : "asm",
-	"url" : "https://github.com/tophattedcoder/asm",
+	"name" : "LLHX",
+	"url" : "https://github.com/tophattedcoder/llhx",
 	"license" : "BSD",
-	"description" : "Support for ASM for a subset of Haxe code",
+	"description" : "Support for ASM, the flash Memory API etc for a subset of Haxe that is low-level",
 	"version" : "0.0.1",
 	"releasenote" : "Initial release",
 	"contributors" : ["tophattedcoder"],

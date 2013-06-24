@@ -1,15 +1,45 @@
-package asm;
+package llhx.js;
 import haxe.macro.*;
 import haxe.macro.Type;
 import haxe.macro.Expr;
+using Lambda;
 using tink.macro.tools.MacroTools;
-class AsmMod {
+class JSGenerator {
+	static var windowVar = {
+		name: "window",
+		type: ComplexType.TPath({
+			params: [],
+			pack: ["js", "html"],
+			name: "DOMWindow"
+		}),
+		expr: null
+	};
 	static inline var FIELD_PRE = "f_";
 	public var globals:Map<String, String>;
+	public var externs:Map<String, String>;
 	public var functions:Map<String, Function>;
 	public var functionIds:Map<String, String>;
 	var locals:Array<Var>;
 	var idn:Int;
+	public static function gen():Array<Field> {
+		var fs:Array<Field> = Context.getBuildFields();
+		var fexpr:Expr = macro {
+			return untyped __js__($v{new JSGenerator(fs).toString()});
+		};
+		var func:Function = {
+			ret: ComplexType.TPath({params: [], pack: [], name: "Dynamic"}),
+			params: [],
+			expr: fexpr,
+			args: []
+		};
+		fs = [{
+			pos: Context.currentPos(),
+			name: Generator.IDENTIFIER,
+			kind: FFun(func),
+			access: [Access.AStatic, Access.APublic]
+		}];
+		return fs;
+	}
 	function genId(x:Int=-1):String {
 		if(x < 0)
 			x = idn++;
@@ -32,6 +62,8 @@ class AsmMod {
 		functions = new Map();
 		functionIds = new Map();
 		globals = new Map();
+		externs = new Map();
+		locals = null;
 		for(f in fs) {
 			switch(f.kind) {
 				case FVar(t, e): globals.set(f.name, genAsm(e));
@@ -50,6 +82,7 @@ class AsmMod {
 		}
 	}
 	public function genAsm(e:Expr, annot:Bool=false):String {
+		if(locals.indexOf(windowVar) == -1) locals.push(windowVar);
 		var complic = true;
 		var as = switch(e.expr) {
 			case EFunction(name, f) if(name == null):
@@ -80,11 +113,25 @@ class AsmMod {
 			case EBlock(exprs): complic = false;
 				"{" + [for(ex in exprs) genAsm(ex) + ";"].join("") + "}";
 			case EReturn(exp): "return " + genAsm(exp, true);
+			case EWhile(cond, exp, true):
+				var gcond = genAsm(cond, true), gexp = genAsm(toBlock(exp));
+				'while($gcond)$gexp';
+			case ECall({expr: EField({expr: EConst(CIdent("Std")), pos: _}, "int")}, [val]): complic = false; genAsm(val);
+			case ECall(field, ps) if(switch(field.expr) {case EField(_, _): true; default: false;}):
+				//trace(locals);
+				//trace(field + " - " + field.typeof(this.locals));
+				var id = genId();
+				externs.set(id, genAsm(field));
+				'ext.$id(' + [for(p in ps) genAsm(p, true)].join(", ") + ")";
 			case ECall(exp, ps): complic = false; genAsm(exp) + "(" + [for(p in ps) genAsm(p, true)].join(", ") + ")";
+			case EConst(CIdent("true")): complic = false; "1";
+			case EConst(CIdent("false")): complic = false; "0";
+			case EConst(CIdent("null")): throw "Null is not allowed";
 			case EConst(CIdent(b)): complic = false; b;
 			case EConst(CInt(v)): complic = false; '$v';
 			case EConst(CFloat(f)): complic = false; f;
-			case EConst(CString(s)): "[" + [for(i in 0...s.length) s.charCodeAt(i)].join(", ") + "]";
+			case EConst(CString(s)): "[" + [for(i in 0...s.length) s.charCodeAt(i)+"|0"].join(", ") + "]";
+			case EUntyped(e): complic = false; genAsm(e);
 			case EVars(vars): 
 				locals = locals.concat(vars);
 				"var "+[for(v in vars) {
@@ -92,8 +139,10 @@ class AsmMod {
 					if(v.expr != null)
 						s += " = " + genAsm(v.expr, false);
 				}].join(", ") + ";";
-			case EField({expr: EConst(CIdent(ident)), pos: _}, field):
-				var name = 'std.$ident.$field';
+			case EField({expr: EConst(CIdent(n)), pos: _}, field) if(n != "Math"):
+				'$n.$field';
+			case EField({expr: EConst(CIdent("Math")), pos: _}, field):
+				var name = 'std.Math.$field';
 				var ref = null;
 				for(gk in globals.keys()) {
 					if(globals.get(gk) == name) {
@@ -123,9 +172,10 @@ class AsmMod {
 				var s = 'for(var $i=$a;$i<$b;$i++)${genAsm(expr)}';
 				locals.remove(tlocal);
 				s;
+			case EUnop(OpDecrement, true, exp): complic = false; genAsm(exp) + "--";
 			case EBinop(OpAssign, a, b): genAsm(a) + "=" + genAsm(b, true);
 			case EBinop(OpAssignOp(op), a, b): genAsm(a) + getOp(op) + "=" + genAsm(b, true);
-			case EBinop(op, a, b): genAsm(a) + getOp(op) + genAsm(b);
+			case EBinop(op, a, b): genAsm(a, true) + getOp(op) + genAsm(b, true);
 			default: trace(e.expr); "";
 		};
 		as = StringTools.replace(as, ";;", ";");
@@ -182,8 +232,9 @@ class AsmMod {
 			s.add(f);
 		var obj = [for(f in functionIds.keys()) '${functionIds.get(f)}: $f'].join(", ");
 		s.add('return {$obj};');
+		s.add("})(window, {");
+		s.add([for(k in externs.keys()) '$k: ${externs.get(k)}'].join(", "));
 		s.add("})");
-		s.add("(window)");
 		trace(s);
 		return s.toString();
 	}

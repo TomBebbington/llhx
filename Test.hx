@@ -1,15 +1,19 @@
-@:build(asm.Asm.gen()) class Testy {
-	public static function fib(d:Int):Float {
-		var a = 2, b = 5, c = 6;
-		return a + b - c + d;
+@:build(llhx.Generator.gen()) class Testy {
+	public static function fib(d:Int):Int {
+		var s:String = "Hello, world!";
+		var n:Int = 0;
+		while(d-- > 0)
+			n += d;
+		return n;
 	}
 }
 class Test {
 	public static function main() {
-		var comp = Testy.asm();
+		//var comp = Testy.getGenerated();
+		var t = new Testy();
 		while(true) {
-			var a = Std.parseFloat(js.Browser.window.prompt("Number", "3"));
-			js.Browser.window.alert('Diagonal: ${comp.fib(a)}');
+			var a = Std.parseInt(js.Browser.window.prompt("Number", "3"));
+			js.Browser.window.alert(Std.string(t.fib(a)));
 		}
 	}
 }
