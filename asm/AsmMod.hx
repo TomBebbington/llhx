@@ -87,12 +87,11 @@ class AsmMod {
 			case EConst(CString(s)): "[" + [for(i in 0...s.length) s.charCodeAt(i)].join(", ") + "]";
 			case EVars(vars): 
 				locals = locals.concat(vars);
-				[for(v in vars) {
-					var s = 'var ${v.name}';
+				"var "+[for(v in vars) {
+					var s = v.name;
 					if(v.expr != null)
-						s += " = " + genAsm(v.expr, true);
-					s += ";";
-				}].join("");
+						s += " = " + genAsm(v.expr, false);
+				}].join(", ") + ";";
 			case EField({expr: EConst(CIdent(ident)), pos: _}, field):
 				var name = 'std.$ident.$field';
 				var ref = null;
@@ -121,7 +120,7 @@ class AsmMod {
 					expr: null
 				};
 				locals.push(tlocal);
-				var s = 'for($i=$a;$i<$b;$i++)${genAsm(expr)}';
+				var s = 'for(var $i=$a;$i<$b;$i++)${genAsm(expr)}';
 				locals.remove(tlocal);
 				s;
 			case EBinop(OpAssign, a, b): genAsm(a) + "=" + genAsm(b, true);
@@ -129,6 +128,7 @@ class AsmMod {
 			case EBinop(op, a, b): genAsm(a) + getOp(op) + genAsm(b);
 			default: trace(e.expr); "";
 		};
+		as = StringTools.replace(as, ";;", ";");
 		var format = switch(e.typeof(locals)) {
 			case Success(TAbstract(t, params)) if(t.get().name == "Int"): complic ? "($)|0" : "$|0";
 			case Success(TAbstract(t, params)) if(t.get().name == "Float"): complic ? "+($)" : "+$";

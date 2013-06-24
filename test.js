@@ -5,15 +5,14 @@ Std.parseFloat = function(x) {
 }
 var Testy = function() { }
 Testy.asm = function() {
-	return (function(std, ext, heap) {"use asm";function _a(b) {b = b|0;var a = 0|0;;for(i=1;i<b;i++)a+=b|0;return a|0;}return {diag: _a};})(window);
+	return (function(std, ext, heap) {"use asm";function _a(d) {d = d|0;var a = 2, b = 5, c = 6;return (a+b-c+d)|0;}return {fib: _a};})(window);
 }
 var Test = function() { }
 Test.main = function() {
 	var comp = Testy.asm();
 	while(true) {
-		var a = Std.parseFloat(js.Browser.window.prompt("X","3"));
-		var b = Std.parseFloat(js.Browser.window.prompt("Y","4"));
-		js.Browser.window.alert("Diagonal: " + comp.diag(a,b));
+		var a = Std.parseFloat(js.Browser.window.prompt("Number","3"));
+		js.Browser.window.alert("Diagonal: " + comp.fib(a));
 	}
 }
 var js = {}
