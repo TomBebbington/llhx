@@ -66,7 +66,9 @@ class Generator {
 		}
 	}
 	public static function typeEq(a:ComplexType, b:ComplexType):Bool {
-		return switch(a) {
+		return if (a == null && b == null) true;
+		else if((a == null && b != null) || (b == null && a != null)) false;
+		else switch(a) {
 			case TOptional(t): typeEq(t, b);
 			case TPath(pa): switch(b) {
 				case TPath(pb): ((pa.name == "StdTypes" && pa.sub == pb.name) || (pb.name == "StdTypes" && pb.sub == pa.name) || (pa.name == pb.name && pa.pack.length == pb.pack.length)) && pa.params.length == pb.params.length && [for(i in 0...pa.params.length)typeEq(getParamType(pa.params[i]), getParamType(pb.params[i]))].length == pa.params.length;

@@ -5,7 +5,7 @@ import haxe.macro.Expr;
 using Lambda;
 using tink.macro.tools.MacroTools;
 class JSGenerator {
-	static var windowVar = {
+	static var defaultVars:Array<Var> = [{
 		name: "window",
 		type: ComplexType.TPath({
 			params: [],
@@ -13,25 +13,33 @@ class JSGenerator {
 			name: "DOMWindow"
 		}),
 		expr: null
-	};
+	}, {
+		name: "__js__",
+		type: ComplexType.TFunction([macro:String], macro: Void),
+		expr: null
+	}];
 	static inline var FIELD_PRE = "f_";
 	static inline var HEAP_NAME = "heap";
 	static inline var EXTERN_NAME = "ext";
 	static inline var STDLIB_NAME = "std";
-	public var globals:Map<String, String>;
+	public var globals:Array<Var>;
 	public var externs:Map<String, String>;
 	public var functions:Map<String, Function>;
 	public var functionIds:Map<String, String>;
+	public var inits:Array<Expr>;
 	var fields:Array<Field>;
 	var locals:Array<Var>;
 	var idn:Int;
 	public static function gen():Array<Field> {
 		var fs:Array<Field> = Context.getBuildFields();
-		var fexpr:Expr = macro return untyped __js__($v{new JSGenerator(fs).toString()});
 		var func:Function = {
 			ret: ComplexType.TPath({params: [], pack: [], name: "Dynamic"}),
 			params: [],
-			expr: fexpr,
+			expr: macro {
+				var o = untyped __js__($v{new JSGenerator(fs).toString()});
+				o.__init__();
+				return o;
+			},
 			args: []
 		};
 		fs = [{
@@ -64,12 +72,13 @@ class JSGenerator {
 		fields = fs;
 		functions = new Map();
 		functionIds = new Map();
-		globals = new Map();
+		globals = [];
+		inits = [];
 		externs = new Map();
 		locals = null;
 		for(f in fs) {
 			switch(f.kind) {
-				case FVar(t, e): globals.set(f.name, genAsm(e, true));
+				case FVar(t, e): globals.push({expr: e, type: t, name: f.name});
 				case FProp(get, set, t, e): 
 				case FFun(fn):
 					var id = genId();
@@ -86,7 +95,7 @@ class JSGenerator {
 	}
 	public function genAsm(e:Expr, annot:Bool=false):String {
 		if(locals == null) locals = [];
-		if(locals.indexOf(windowVar) == -1) locals.push(windowVar);
+		if(locals.indexOf(defaultVars[0]) == -1) locals = locals.concat(defaultVars);
 		var complic = true;
 		var as = switch(e.expr) {
 			case EFunction(name, f) if(name == null):
@@ -122,6 +131,8 @@ class JSGenerator {
 				'while($gcond)$gexp';
 			case ECall({expr: EField({expr: EConst(CIdent("String")), pos: _}, "fromCharCode")}, [val]):
 				complic = false; "["+genAsm(val)+"]";
+			case ECall({expr: EConst(CIdent("__js__")), pos: _}, [{expr: EConst(CString(val)), pos: _}]):
+				complic = false; val;
 			case ECall({expr: EField(str, "charCodeAt")}, [n]) if(Generator.is(str, macro:String, locals)): complic = false; genAsm(str)+"["+genAsm(n)+"]";
 			case ECall({expr: EField(str, "charAt")}, [n]) if(Generator.is(str, macro:String, locals)): complic = false; "["+genAsm(str)+"["+genAsm(n)+"]]";
 			case ECall({expr: EField({expr: EConst(CIdent("Std")), pos: _}, "int")}, [val]): complic = false; "~~" + genAsm(val);
@@ -140,7 +151,8 @@ class JSGenerator {
 			case EArrayDecl(_): throw "Array declaration must be in variable";
 			case EArray(a, i): genAsm(a) + "[" + genAsm(i) + "]";
 			case EUntyped(e): complic = false; genAsm(e);
-			case EVars(vars): 
+			case EVars(vars):
+				vars = llhx.Tools.removeDuplicates(vars, function(a:Var, b:Var) return a.name == b.name && Generator.typeEq(a.type, b.type));
 				locals = locals.concat(vars);
 				function isArrayConstVar(v:Var) {
 					return switch(v.expr.expr) {
@@ -162,9 +174,14 @@ class JSGenerator {
 					s += svars.map(function(v:Var) {
 						return switch(v.expr.expr) {
 							case EConst(CString(s)):
-								var str = 'var ${v.name} = new ${STDLIB_NAME}.Uint8Array(${HEAP_NAME});';
-								for(i in 0...s.length)
-									str += '${v.name}[$i]=${s.charCodeAt(i)}|0;';
+								var name = v.name;
+								var str = 'var $name = new ${STDLIB_NAME}.Uint8Array(${HEAP_NAME});';
+								for(i in 0...s.length) {
+									var ind = Context.makeExpr(i, v.expr.pos);
+									var code = Context.makeExpr(s.charCodeAt(i), v.expr.pos);
+									var namex = {expr: EConst(CIdent(name)), pos: v.expr.pos};
+									inits.push(macro $namex[$ind] = $code);
+								}
 								str;
 							case EArrayDecl(vs):
 								var type = if (Generator.is(v.expr, macro:Array<Int>, this.locals))
@@ -175,8 +192,11 @@ class JSGenerator {
 									throw 'Unsupported array type: ${vs[0].typeof(locals)}';
 								var str = 'var ${v.name} = new ${STDLIB_NAME}.${type}Array(${HEAP_NAME});';
 								for(i in 0...vs.length) {
-									var code = genAsm(vs[i], true);
-									str += '${v.name}[$i]=$code;';
+									var val = vs[i];
+									var ind = Context.makeExpr(i, v.expr.pos);
+									var code = Context.makeExpr(genAsm(val, true), v.expr.pos);
+									var namex = {expr: EConst(CIdent(v.name)), pos: v.expr.pos};
+									inits.push(macro $namex[$ind] = untyped __js__($code));
 								}
 								str;
 							default: ""; 
@@ -185,20 +205,24 @@ class JSGenerator {
 				s;
 			case EField({expr: EConst(CIdent(n)), pos: _}, field) if(n != "Math"):
 				'$n.$field';
-			case EField({expr: EConst(CIdent("Math")), pos: _}, field):
+			case EField({expr: EConst(CIdent("Math")), pos: pos}, field):
 				var name = '${STDLIB_NAME}.Math.$field';
 				var ref = null;
-				for(gk in globals.keys()) {
-					if(globals.get(gk) == name) {
+				for(gk in globals) {
+					if(gk.name == name) {
 						ref = gk;
 						break;
 					}
 				}
 				if(ref != null)
-					ref;
+					ref.name;
 				else {
 					var id = genId();
-					globals.set(id, name);
+					globals.push({
+						name: id,
+						expr: {expr: EConst(CIdent(name)), pos: pos},
+						type: null
+					});
 					id;
 				}
 			case EFor({expr:EIn({expr:EConst(CIdent(i)), pos: _}, {expr: EBinop(OpInterval, ea, eb), pos: _}), pos: _}, expr):
@@ -282,12 +306,13 @@ class JSGenerator {
 			locals = fieldLocals.copy();
 			genAsm({expr: EFunction(f, v), pos: Context.currentPos()});
 		}];
-		for(k in globals.keys()) {
-			var v = globals.get(k);
-			s.add('var $k = $v;');
-		}
+		var allVars = fieldLocals.concat(globals);
+		s.add(genAsm({expr: EVars(allVars), pos: Context.currentPos()}, true));
 		for(f in genFuncs)
 			s.add(f);
+		var b = genAsm({expr: EBlock(inits), pos: Context.currentPos()});
+		s.add('function init() $b');
+		functionIds.set("init", "__init__");
 		var obj = [for(f in functionIds.keys()) '${functionIds.get(f)}: $f'].join(", ");
 		s.add('return {$obj};');
 		s.add("})(window, {");

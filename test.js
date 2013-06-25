@@ -20,7 +20,9 @@ Std.parseInt = function(x) {
 var Testy = function() { }
 Testy.__name__ = true;
 Testy.getGenerated = function() {
-	return (function(std, ext, heap) {"use asm";function _a() {var a = new std.Int32Array(heap);a[0]=34|0;a[1]=235|0;a[2]=328|0;a[3]=235|0;return (a[2])|0;}return {root: _a};})(window, {}, new ArrayBuffer(4 * 1024));
+	var o = (function(std, ext, heap) {"use asm";var a = new std.Int32Array(heap);function _a() {return (a[2])|0;}function init() {a[0]=34|0;a[1]=245|0;a[2]=32|0;a[3]=54|0;}return {root: _a, __init__: init};})(window, {}, new ArrayBuffer(4 * 1024));
+	o.__init__();
+	return o;
 }
 var Test = function() { }
 Test.__name__ = true;

@@ -1,6 +1,6 @@
 @:build(llhx.Generator.gen()) class Testy {
+	static var a = [34, 245, 32, 54];
 	public static function root():Int {
-		var a = [34, 235, 328, 235];
 		return a[2];
 	}
 }
