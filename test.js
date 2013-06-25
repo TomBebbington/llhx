@@ -20,7 +20,7 @@ Std.parseInt = function(x) {
 var Testy = function() { }
 Testy.__name__ = true;
 Testy.getGenerated = function() {
-	var o = (function(std, ext, heap) {"use asm";var a = new std.Int32Array(heap);function _a() {return (a[2])|0;}function init() {a[0]=34|0;a[1]=245|0;a[2]=32|0;a[3]=54|0;}return {root: _a, __init__: init};})(window, {}, new ArrayBuffer(4 * 1024));
+	var o = (function(std, ext, heap) {"use asm";var a = new std.Int32Array(heap);function _a(n) {n = n|0;var b = new std.Int32Array(heap);return (a[n|0])|0;}function init() {b[0|0]=2|0;b[1|0]=3|0;b[2|0]=5|0;a[0|0]=34|0;a[1|0]=245|0;a[2|0]=32|0;a[3|0]=54|0;}return {root: _a, __init__: init};})(window, {}, new ArrayBuffer(4 * 1024));
 	o.__init__();
 	return o;
 }
@@ -30,7 +30,7 @@ Test.main = function() {
 	var t = Testy.getGenerated();
 	while(true) {
 		var a = Std.parseInt(js.Browser.window.prompt("Number","3"));
-		js.Browser.window.alert(Std.string(t.root()));
+		js.Browser.window.alert(Std.string(t.root(a)));
 	}
 }
 var js = {}

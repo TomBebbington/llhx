@@ -110,6 +110,7 @@ class JSGenerator {
 						expr: a.value
 					});
 					switch(a.type) {
+						case _ if(a.type == null): Context.error("Must be typed", e.pos);
 						case TPath({name: "Int", pack: [], params: []}):
 							asserts += '${a.name} = ${a.name}|0;';
 						case TPath({name: "Float", pack: [], params: []}):
@@ -143,13 +144,13 @@ class JSGenerator {
 			case ECall(exp, ps): complic = false; genAsm(exp) + "(" + [for(p in ps) genAsm(p, true)].join(", ") + ")";
 			case EConst(CIdent("true")): complic = false; "1";
 			case EConst(CIdent("false")): complic = false; "0";
-			case EConst(CIdent("null")): throw "Null is not allowed";
+			case EConst(CIdent("null")): Context.error("Null is not allowed", e.pos);
 			case EConst(CIdent(b)): complic = false; b;
 			case EConst(CInt(v)): complic = false; '$v';
 			case EConst(CFloat(f)): complic = false; f;
-			case EConst(CString(_)): throw "String literal must be in variable";
-			case EArrayDecl(_): throw "Array declaration must be in variable";
-			case EArray(a, i): genAsm(a) + "[" + genAsm(i) + "]";
+			case EConst(CString(_)): Context.error("String literal must be in variable", e.pos);
+			case EArrayDecl(_): Context.error("Array declaration must be in variable", e.pos);
+			case EArray(a, i): genAsm(a) + "[" + genAsm(i, true) + "]";
 			case EUntyped(e): complic = false; genAsm(e);
 			case EVars(vars):
 				vars = llhx.Tools.removeDuplicates(vars, function(a:Var, b:Var) return a.name == b.name && Generator.typeEq(a.type, b.type));
@@ -189,7 +190,7 @@ class JSGenerator {
 								else if(Generator.is(v.expr, macro:Array<Float>, this.locals))
 									"Float64"
 								else
-									throw 'Unsupported array type: ${vs[0].typeof(locals)}';
+									Context.error('Unsupported array type: ${vs[0].typeof(locals)}', e.pos);
 								var str = 'var ${v.name} = new ${STDLIB_NAME}.${type}Array(${HEAP_NAME});';
 								for(i in 0...vs.length) {
 									var val = vs[i];
@@ -318,7 +319,6 @@ class JSGenerator {
 		s.add("})(window, {");
 		s.add([for(k in externs.keys()) '$k: ${externs.get(k)}'].join(", "));
 		s.add("}, new ArrayBuffer(4 * 1024))");
-		trace(s);
 		return s.toString();
 	}
 }
