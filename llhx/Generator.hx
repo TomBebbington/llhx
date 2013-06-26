@@ -93,7 +93,8 @@ class Generator {
 			case ECheckType(e, t): macro:Bool;
 			case ECast(e, null): typeOf(e, p);
 			case ECast(e, t): t;
-			case ECall(f, params):
+			case ECall({expr: EField({expr: EConst(CIdent("Math")), pos: _}, _), pos: _}, _): macro:Float;
+			case ECall(f, params): trace(f);
 				switch(typeOf(f, p)) {
 					case TFunction(_, ret): ret;
 					default: dynam;

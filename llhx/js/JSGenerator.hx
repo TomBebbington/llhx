@@ -40,6 +40,7 @@ class JSGenerator {
 		var exp = new JSGenerator(fs).toExpr();
 		var a = Context.parse(ty, exp.pos);
 		exp = macro untyped $a = $exp;
+		for(f in fs) f.meta.push({pos: Context.currentPos(), params: [], name: ":extern"});
 		fs.push({
 			pos: exp.pos,
 			kind: FFun({
@@ -241,7 +242,16 @@ class JSGenerator {
 			case EField({expr: EConst(CIdent("Math"))}, field) if(Generator.typeEq(Generator.typeOf(e, locals), macro:Void)):
 				var id = genId();
 				complic = false;
-				externs.set(id, macro function() return $e);
+				var set = false;
+				for(k in externs.keys()) {
+					var v = externs.get(k);
+					switch(v.expr) {
+						case EFunction(null, {expr: {expr: EReturn(e)}}): id = k;set=true; break;
+						default:
+					};
+				}
+				if(!set)
+					externs.set(id, macro function() return $e);
 				exprType = macro:Float;
 				genAsm(Context.makeExpr(Reflect.field(Math, field), e.pos), false);
 			case EField({expr: EConst(CIdent("Math")), pos: pos}, field):
@@ -292,7 +302,8 @@ class JSGenerator {
 				'new ${STDLIB_NAME}.Float64Array(${HEAP_NAME})';
 			case ENew({name: "Array", pack: [], params: [TPType(p)]}, params) if(Generator.typeEq(p, macro: Int)):
 				'new ${STDLIB_NAME}.Int32Array(${HEAP_NAME})';
-			case EUnop(OpDecrement, true, exp): complic = false; genAsm(exp) + "--";
+			case EUnop(OpIncrement, true, exp): genAsm(exp) + "++";
+			case EUnop(OpDecrement, true, exp): genAsm(exp) + "--";
 			case EBinop(OpAssign, a, b):
 				if(!Generator.typeEq(Generator.typeOf(a, locals), Generator.typeOf(b, locals)))
 					Context.error("Incompatible types", e.pos);
@@ -301,7 +312,7 @@ class JSGenerator {
 				if(!Generator.typeEq(Generator.typeOf(a, locals), Generator.typeOf(b, locals)))
 					Context.error("Incompatible types", e.pos);
 				genAsm(a) + getOp(op) + "=" + genAsm(b, true);
-			case EBinop(op, a, b): 
+			case EBinop(op, a, b):
 				var ta = Generator.typeOf(a, locals), tb = Generator.typeOf(b, locals);
 				if(!Generator.typeEq(ta, tb))
 					Context.error('Incompatible types $ta and $tb with $a and $b', e.pos);
