@@ -30,7 +30,7 @@ class Generator {
 		else switch(a) {
 			case TOptional(t): typeEq(t, b);
 			case TPath(pa): switch(b) {
-				case TPath(pb): ((pa.name == "StdTypes" && pa.sub == pb.name) || (pb.name == "StdTypes" && pb.sub == pa.name) || (pa.name == pb.name && pa.pack.length == pb.pack.length)) && pa.params.length == pb.params.length && [for(i in 0...pa.params.length)typeEq(getParamType(pa.params[i]), getParamType(pb.params[i]))].length == pa.params.length;
+				case TPath(pb): ((pa.name == "Dynamic" || pb.name == "Dynamic") || (pa.name == "StdTypes" && pa.sub == pb.name) || (pb.name == "StdTypes" && pb.sub == pa.name) || (pa.name == pb.name && pa.pack.length == pb.pack.length)) && pa.params.length == pb.params.length && [for(i in 0...pa.params.length)typeEq(getParamType(pa.params[i]), getParamType(pb.params[i]))].length == pa.params.length;
 				default: false;
 			}
 			case TParent(t): return typeEq(t, b);
@@ -48,11 +48,69 @@ class Generator {
 		};
 	}
 	public static function typeOf(e:Expr, p:Array<Var>):ComplexType {
+		var void = macro:Void;
+		var dynam = macro:Dynamic;
 		return switch(e.expr) {
-			default:
-				if(p != null && p.length > 0)
-					e = {expr: EBlock([{expr: EVars(p), pos: e.pos}]), pos: e.pos};
-				Context.toComplexType(Context.typeof(e));
+			case EWhile(_, _, _): void;
+			case EVars(vs): for(v in vs) p.push(v); void;
+			case EUntyped(_): dynam;
+			case EUnop(_, _, e): typeOf(e, p);
+			case ETry(e, _): typeOf(e, p);
+			case EThrow(e): void;
+			case ETernary(econf, eif, eelse): typeOf(eif, p);
+			case ESwitch(_, cases, _) if(cases.length > 0): typeOf(cases[0].expr, p); 
+			case ESwitch(_, _, edef): typeOf(edef, p);
+			case EReturn(null): void;
+			case EReturn(e): typeOf(e, p);
+			case EParenthesis(e): typeOf(e, p);
+			case EObjectDecl(fields): TAnonymous([for(f in fields){name: f.field, pos: e.pos, kind: FieldType.FVar(typeOf(f.expr, p), f.expr)}]);
+			case ENew(tp, _): TPath(tp);
+			case EMeta(_, _): void;
+			case EIn(_, _): void;
+			case EIf(_, eif, _): typeOf(eif, p);
+			case EFunction(_, f): ComplexType.TFunction([for(a in f.args) a.type == null ? typeOf(a.value, p) : a.type], f.ret == null ? typeOf(f.expr, p) : f.ret);
+			case EFor(eit, expr): void;
+			case EField({expr: EConst(CIdent(i)), pos: _}, field) if(Context.getType(i) != null): dynam;
+			default: void;
+			case EDisplayNew(_): void;
+			case EDisplay(e, isCall): void;
+			case EContinue: void;
+			case EConst(CInt(v)): macro:Int;
+			case EConst(CFloat(f)): macro:Float;
+			case EConst(CString(s)): macro:String;
+			case EConst(CIdent(i)):
+				var daType = null;
+				for(v in p)
+					if(v.name == i) {
+						daType = v.type == null ? typeOf(v.expr, p) : v.type;
+						break;
+					}
+				try {
+					daType = Context.toComplexType(Context.getType(i));
+				} catch(e:Dynamic) {}
+				daType == null ? error('No such variable "$i"', e.pos) : daType;
+			case EConst(CRegexp(r, opt)): macro:RegExp;
+			case ECheckType(e, t): macro:Bool;
+			case ECast(e, null): typeOf(e, p);
+			case ECast(e, t): t;
+			case ECall(f, params):
+				switch(typeOf(f, p)) {
+					case TFunction(_, ret): ret;
+					default: dynam;
+				}
+			case EBreak: void;
+			case EBlock([]): void;
+			case EBlock(exprs): typeOf(exprs[exprs.length-1], p);
+			case EBinop(_, a, _): typeOf(a, p);
+			case EArrayDecl(vals) if(vals.length == 0): macro:Array<Dynamic>;
+			case EArrayDecl(vals): macro:Array<Dynamic>;
+			case EArray(a, _): switch(typeOf(a, p)) {
+				case TPath(pa): switch(pa.params[0]) {
+					case TPType(t): t;
+					case TPExpr(e): typeOf(e, p);
+				};
+				default: dynam;
+			};
 		}
 	}
 	public static function is(e:Expr, ct:ComplexType, p:Array<Var>):Bool {

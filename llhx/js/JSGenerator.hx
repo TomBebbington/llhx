@@ -101,6 +101,7 @@ class JSGenerator {
 		if(locals.indexOf(defaultVars[0]) == -1) locals = locals.concat(defaultVars);
 		var complic = true;
 		var typeCheck = true;
+		var exprType = Generator.typeOf(e, locals);
 		var as = switch(e.expr) {
 			case EFunction(name, f) if(name == null):
 				throw "No anonymous functions allowed in ASM";
@@ -239,8 +240,10 @@ class JSGenerator {
 				s;
 			case EField({expr: EConst(CIdent("Math"))}, field) if(Generator.typeEq(Generator.typeOf(e, locals), macro:Void)):
 				var id = genId();
+				complic = false;
 				externs.set(id, macro function() return $e);
-				genAsm(Context.makeExpr(Reflect.field(Math, field), e.pos), true);
+				exprType = macro:Float;
+				genAsm(Context.makeExpr(Reflect.field(Math, field), e.pos), false);
 			case EField({expr: EConst(CIdent("Math")), pos: pos}, field):
 				var name = '${STDLIB_NAME}.Math.$field';
 				var ref = null;
@@ -290,17 +293,27 @@ class JSGenerator {
 			case ENew({name: "Array", pack: [], params: [TPType(p)]}, params) if(Generator.typeEq(p, macro: Int)):
 				'new ${STDLIB_NAME}.Int32Array(${HEAP_NAME})';
 			case EUnop(OpDecrement, true, exp): complic = false; genAsm(exp) + "--";
-			case EBinop(OpAssign, a, b): genAsm(a) + "=" + genAsm(b, true);
-			case EBinop(OpAssignOp(op), a, b): genAsm(a) + getOp(op) + "=" + genAsm(b, true);
-			case EBinop(op, a, b): genAsm(a, true) + getOp(op) + genAsm(b, true);
+			case EBinop(OpAssign, a, b):
+				if(!Generator.typeEq(Generator.typeOf(a, locals), Generator.typeOf(b, locals)))
+					Context.error("Incompatible types", e.pos);
+				genAsm(a) + "=" + genAsm(b, true);
+			case EBinop(OpAssignOp(op), a, b):
+				if(!Generator.typeEq(Generator.typeOf(a, locals), Generator.typeOf(b, locals)))
+					Context.error("Incompatible types", e.pos);
+				genAsm(a) + getOp(op) + "=" + genAsm(b, true);
+			case EBinop(op, a, b): 
+				var ta = Generator.typeOf(a, locals), tb = Generator.typeOf(b, locals);
+				if(!Generator.typeEq(ta, tb))
+					Context.error('Incompatible types $ta and $tb with $a and $b', e.pos);
+				genAsm(a, true) + getOp(op) + genAsm(b, true);
 			default: Generator.error('Could not compile ${e.toString()}', e.pos); "";
 		};
 		as = StringTools.replace(as, ";;", ";");
 		return if(typeCheck) {
-			var format = switch(Generator.typeOf(e, locals)) {
+			var format = switch(exprType) {
 				case TPath({name: "Int", pack: [], sub: _, params: []}): complic ? "($)|0" : "$|0";
 				case TPath({name: "Float", pack: [], sub: _, params: []}): complic ? "+($)" : "+$";
-				case all: "$";
+				default: "$";
 			};
 			!annot ? as : StringTools.replace(format, "$", as); 
 		} else as;
