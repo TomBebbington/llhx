@@ -14,50 +14,9 @@ class Generator {
 		};
 	}
 	public static function gen():Array<Field> {
-		return if(Context.defined("js"))
+		return if(Context.defined("js") && !Context.defined("no-asm"))
 			llhx.js.JSGenerator.gen();
-		else {
-			var pos = Context.currentPos();
-			var fs = Context.getBuildFields();
-			var cl = Context.getLocalClass().get();
-			var tp:TypePath = toTypePath(cl);
-			var ty = ComplexType.TPath(tp);
-			for(ff in fs) {
-				if(!ff.access.remove(AStatic))
-					throw "All methods should be static";
-				switch(ff.kind) {
-					case FFun(func): func.expr.map(map);
-					default: 
-				}
-			}
-			var func:Function = {
-				ret: ty,
-				params: [],
-				args: [],
-				expr: {expr: ENew(tp, []), pos: pos}
-			};
-			var prim:Field = {
-				pos: pos,
-				name: Generator.IDENTIFIER,
-				kind: FFun(func),
-				access: [Access.AStatic, Access.APublic]
-			};
-			var constFunc:Function = {
-				ret: null,
-				params: [],
-				expr: {expr: EBlock([]), pos: pos},
-				args: []
-			};
-			var const:Field = {
-				pos: pos,
-				name: "new",
-				kind: FFun(constFunc),
-				access: [Access.APublic]
-			};
-			fs.push(const);
-			//fs.push(prim);
-			fs;
-		}
+		else Context.getBuildFields();
 	}
 	static function getParamType(p:TypeParam):ComplexType {
 		return switch(p) {
@@ -89,9 +48,12 @@ class Generator {
 		};
 	}
 	public static function typeOf(e:Expr, p:Array<Var>):ComplexType {
-		if(p != null)
-			e = {expr: EBlock([{expr: EVars(p), pos: e.pos}]), pos: e.pos};
-		return Context.toComplexType(Context.typeof(e));
+		return switch(e.expr) {
+			default:
+				if(p != null && p.length > 0)
+					e = {expr: EBlock([{expr: EVars(p), pos: e.pos}]), pos: e.pos};
+				Context.toComplexType(Context.typeof(e));
+		}
 	}
 	public static function is(e:Expr, ct:ComplexType, p:Array<Var>):Bool {
 		return typeEq(ct, typeOf(e, p));

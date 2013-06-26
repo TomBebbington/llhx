@@ -33,23 +33,24 @@ class JSGenerator {
 	var idn:Int;
 	public static function gen():Array<Field> {
 		var fs:Array<Field> = Context.getBuildFields();
+		var typath = Generator.toTypePath(Context.getLocalClass().get());
+		var ty = (typath.sub == null ? "" : '${typath.sub}.') + typath.name;
+		for(p in typath.pack)
+			ty = '$p.$ty';
 		var exp = new JSGenerator(fs).toExpr();
-		var func:Function = {
-			ret: ComplexType.TPath({params: [], pack: [], name: "Dynamic"}),
-			params: [],
-			expr: macro {
-				var o = $exp;
-				o.__init__();
-				return o;
-			},
-			args: []
-		};
-		fs = [{
-			pos: Context.currentPos(),
-			name: Generator.IDENTIFIER,
-			kind: FFun(func),
-			access: [Access.AStatic, Access.APublic]
-		}];
+		var a = Context.parse(ty, exp.pos);
+		exp = macro untyped $a = $exp;
+		fs.push({
+			pos: exp.pos,
+			kind: FFun({
+				ret: macro:Void,
+				params: [],
+				args: [],
+				expr: exp
+			}),
+			name: "__init__",
+			access: [AStatic]
+		});
 		return fs;
 	}
 	function genId(x:Int=-1):String {
@@ -236,10 +237,10 @@ class JSGenerator {
 						}
 					}).join("");
 				s;
-			case EField({expr: _, pos: _}, _) if(Generator.typeEq(Generator.typeOf(e, locals), macro:Void)):
+			case EField({expr: EConst(CIdent("Math"))}, field) if(Generator.typeEq(Generator.typeOf(e, locals), macro:Void)):
 				var id = genId();
 				externs.set(id, macro function() return $e);
-				'${EXTERN_NAME}.$id()';
+				genAsm(Context.makeExpr(Reflect.field(Math, field), e.pos), true);
 			case EField({expr: EConst(CIdent("Math")), pos: pos}, field):
 				var name = '${STDLIB_NAME}.Math.$field';
 				var ref = null;
@@ -296,15 +297,13 @@ class JSGenerator {
 		};
 		as = StringTools.replace(as, ";;", ";");
 		return if(typeCheck) {
-			as;
-		} else {
 			var format = switch(Generator.typeOf(e, locals)) {
 				case TPath({name: "Int", pack: [], sub: _, params: []}): complic ? "($)|0" : "$|0";
 				case TPath({name: "Float", pack: [], sub: _, params: []}): complic ? "+($)" : "+$";
-				default: "$";
+				case all: "$";
 			};
 			!annot ? as : StringTools.replace(format, "$", as); 
-		}
+		} else as;
 	}
 	function getOp(op:Binop) {
 		return switch(op) {
@@ -368,6 +367,8 @@ class JSGenerator {
 			}
 		]), pos: Context.currentPos()};
 		var buf = macro new js.html.ArrayBuffer($v{BUFFER_SIZE});
-		return {expr: ECall(funcExpr, [window, obj, buf]), pos: obj.pos};
+		return macro {
+			$funcExpr($window, $obj, $buf);
+		};
 	}
 }
