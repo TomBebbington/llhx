@@ -1,8 +1,8 @@
 package llhx;
 import haxe.macro.*;
 import haxe.macro.Expr;
-using tink.macro.tools.MacroTools;
 import haxe.macro.Type;
+using haxe.macro.ExprTools;
 class Generator {
 	public static inline var IDENTIFIER = "getGenerated";
 	public static function toTypePath(cp:ClassType):TypePath {
@@ -26,7 +26,7 @@ class Generator {
 				if(!ff.access.remove(AStatic))
 					throw "All methods should be static";
 				switch(ff.kind) {
-					case FFun(func): func.expr.transform(map);
+					case FFun(func): func.expr.map(map);
 					default: 
 				}
 			}
@@ -88,13 +88,13 @@ class Generator {
 			default: false;
 		};
 	}
+	public static function typeOf(e:Expr, p:Array<Var>):ComplexType {
+		if(p != null)
+			e = {expr: EBlock([{expr: EVars(p), pos: e.pos}]), pos: e.pos};
+		return Context.toComplexType(Context.typeof(e));
+	}
 	public static function is(e:Expr, ct:ComplexType, p:Array<Var>):Bool {
-		return switch(e.typeof(p)) {
-			case Success(t):
-				var cct= Context.toComplexType(Context.follow(t));
-				return typeEq(ct, cct);
-			case Failure(msg): throw msg;
-		};
+		return typeEq(ct, typeOf(e, p));
 	}
 	static function map(e:Expr):Expr {
 		return switch(e.expr) {
