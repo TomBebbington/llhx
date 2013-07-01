@@ -15,7 +15,19 @@ class JSGenerator {
 		expr: null
 	}, {
 		name: "__js__",
-		type: ComplexType.TFunction([macro:String], macro: Void),
+		type: macro: String -> Void,
+		expr: null
+	}, {
+		name: "trace",
+		type: macro: Dynamic -> Void,
+		expr: null
+	}, {
+		name: STDLIB_NAME,
+		type: macro: Dynamic,
+		expr: null
+	}, {
+		name: EXTERN_NAME,
+		type: macro: Dynamic,
 		expr: null
 	}];
 	static inline var FIELD_PRE = "f_";
@@ -40,7 +52,11 @@ class JSGenerator {
 		var exp = new JSGenerator(fs).toExpr();
 		var a = Context.parse(ty, exp.pos);
 		exp = macro untyped $a = $exp;
-		for(f in fs) f.meta.push({pos: Context.currentPos(), params: [], name: ":extern"});
+		for(f in fs)
+			switch(f.kind) {
+				case FieldType.FFun(_): f.meta.push({pos: Context.currentPos(), params: [], name: ":extern"});
+				default:
+			}
 		fs.push({
 			pos: exp.pos,
 			kind: FFun({
@@ -145,6 +161,18 @@ class JSGenerator {
 				complic = false; "["+genAsm(val)+"]";
 			case ECall({expr: EConst(CIdent("__js__")), pos: _}, [{expr: EConst(CString(val)), pos: _}]):
 				complic = false; val;
+			case ECall({expr: EConst(CIdent("trace")), pos: pos}, [exp]):
+				var id = genId();
+				var externe:Expr = {expr: EConst(CIdent(EXTERN_NAME)), pos: pos};
+				var fielde:Expr = {expr: EField(externe, "trace"), pos: pos};
+				globals.push({
+					expr: fielde,
+					name: id,
+					type: macro: Dynamic -> Void
+				});
+				var posInfos = Tools.toPosInfos(pos);
+				externs.set("trace", macro function(o) haxe.Log.trace(o, $v{posInfos}));
+				complic = false; '$id(${genAsm(exp, false)})';
 			case ECall({expr: EField(str, "charCodeAt")}, [n]) if(Generator.is(str, macro:String, locals)): complic = false; genAsm(str)+"["+genAsm(n)+"]";
 			case ECall({expr: EField(str, "charAt")}, [n]) if(Generator.is(str, macro:String, locals)): complic = false; "["+genAsm(str)+"["+genAsm(n)+"]]";
 			case ECall({expr: EField({expr: EConst(CIdent("Std")), pos: _}, "int")}, [val]): complic = false; "~~" + genAsm(val);
@@ -240,19 +268,6 @@ class JSGenerator {
 					}).join("");
 				s;
 			case EField({expr: EConst(CIdent("Math"))}, field) if(Generator.typeEq(Generator.typeOf(e, locals), macro:Void)):
-				var id = genId();
-				complic = false;
-				var set = false;
-				for(k in externs.keys()) {
-					var v = externs.get(k);
-					switch(v.expr) {
-						case EFunction(null, {expr: {expr: EReturn(e)}}): id = k;set=true; break;
-						default:
-					};
-				}
-				if(!set)
-					externs.set(id, macro function() return $e);
-				exprType = macro:Float;
 				genAsm(Context.makeExpr(Reflect.field(Math, field), e.pos), false);
 			case EField({expr: EConst(CIdent("Math")), pos: pos}, field):
 				var name = '${STDLIB_NAME}.Math.$field';
@@ -359,7 +374,7 @@ class JSGenerator {
 		var s = new StringBuf();
 		s.add('(function(${STDLIB_NAME}, ${EXTERN_NAME}, ${HEAP_NAME}) {');
 		s.add("\"use asm\";");
-		var fieldLocals:Array<Var> = [for(f in fields) switch(f.kind) {
+		var defLocals:Array<Var> = [for(f in fields) switch(f.kind) {
 			case FVar(typ, exp): {
 				type: typ,
 				expr: exp,
@@ -367,14 +382,14 @@ class JSGenerator {
 			}
 			default: null;
 		}].filter(function(x) return x != null);
-		var genFuncs = [for(f in functions.keys()) {
+		var funcConts = [for(f in functions.keys()) {
 			var v = functions.get(f);
-			locals = fieldLocals.copy();
+			locals = defLocals.copy();
 			genAsm({expr: EFunction(f, v), pos: Context.currentPos()});
 		}];
-		var allVars = fieldLocals.concat(globals);
-		s.add(genAsm({expr: EVars(allVars), pos: Context.currentPos()}, true));
-		for(f in genFuncs)
+		defLocals = defLocals.concat(globals);
+		s.add(genAsm({expr: EVars(defLocals), pos: Context.currentPos()}, true));
+		for(f in funcConts)
 			s.add(f);
 		var b = genAsm({expr: EBlock(inits), pos: Context.currentPos()});
 		s.add('function init() $b');

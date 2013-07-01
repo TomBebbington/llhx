@@ -53,14 +53,14 @@ class Generator {
 		return switch(e.expr) {
 			case EWhile(_, _, _): void;
 			case EVars(vs): for(v in vs) p.push(v); void;
-			case EUntyped(_): dynam;
+			case EUntyped(o): trace(e); trace(o); dynam;
 			case EUnop(_, _, e): typeOf(e, p);
 			case ETry(e, _): typeOf(e, p);
 			case EThrow(e): void;
 			case ETernary(econf, eif, eelse): typeOf(eif, p);
 			case ESwitch(_, cases, _) if(cases.length > 0): typeOf(cases[0].expr, p); 
 			case ESwitch(_, _, edef): typeOf(edef, p);
-			case EReturn(null): void;
+			case EReturn(e) if(e == null): void;
 			case EReturn(e): typeOf(e, p);
 			case EParenthesis(e): typeOf(e, p);
 			case EObjectDecl(fields): TAnonymous([for(f in fields){name: f.field, pos: e.pos, kind: FieldType.FVar(typeOf(f.expr, p), f.expr)}]);
@@ -70,7 +70,7 @@ class Generator {
 			case EIf(_, eif, _): typeOf(eif, p);
 			case EFunction(_, f): ComplexType.TFunction([for(a in f.args) a.type == null ? typeOf(a.value, p) : a.type], f.ret == null ? typeOf(f.expr, p) : f.ret);
 			case EFor(eit, expr): void;
-			case EField({expr: EConst(CIdent(i)), pos: _}, field) if(Context.getType(i) != null): dynam;
+			case EField({expr: EConst(CIdent(i)), pos: _}, field) if( try Context.getType(i) != null catch(e:Dynamic) true): dynam;
 			default: void;
 			case EDisplayNew(_): void;
 			case EDisplay(e, isCall): void;
@@ -91,10 +91,10 @@ class Generator {
 				daType == null ? error('No such variable "$i"', e.pos) : daType;
 			case EConst(CRegexp(r, opt)): macro:RegExp;
 			case ECheckType(e, t): macro:Bool;
-			case ECast(e, null): typeOf(e, p);
+			case ECast(e, t) if(t == null): typeOf(e, p);
 			case ECast(e, t): t;
 			case ECall({expr: EField({expr: EConst(CIdent("Math")), pos: _}, _), pos: _}, _): macro:Float;
-			case ECall(f, params): trace(f);
+			case ECall(f, params):
 				switch(typeOf(f, p)) {
 					case TFunction(_, ret): ret;
 					default: dynam;
@@ -106,7 +106,7 @@ class Generator {
 			case EArrayDecl(vals) if(vals.length == 0): macro:Array<Dynamic>;
 			case EArrayDecl(vals): macro:Array<Dynamic>;
 			case EArray(a, _): switch(typeOf(a, p)) {
-				case TPath(pa): switch(pa.params[0]) {
+				case TPath(pa) if(pa.params.length > 0): switch(pa.params[0]) {
 					case TPType(t): t;
 					case TPExpr(e): typeOf(e, p);
 				};
@@ -128,8 +128,8 @@ class Generator {
 	}
 	public static inline function error(s:String, p:Position):Dynamic {
 		var pi = Context.getPosInfos(p);
-		Sys.println('$s at ${pi.file} chars ${pi.min}-${pi.max}');
-		Sys.exit(0);
+		Sys.println('${pi.file}:${Tools.getLineInFile(p)} - $s');
+		Sys.exit(1);
 		return null;
 	}
 }
