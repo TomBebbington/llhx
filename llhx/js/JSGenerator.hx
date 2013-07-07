@@ -2,6 +2,7 @@ package llhx.js;
 import haxe.macro.*;
 import haxe.macro.Type;
 import haxe.macro.Expr;
+using haxe.macro.ComplexTypeTools;
 using Lambda;
 using haxe.macro.ExprTools;
 class JSGenerator {
@@ -290,6 +291,8 @@ class JSGenerator {
 				'new ${STDLIB_NAME}.Int32Array(${HEAP_NAME})';
 			case EUnop(OpIncrement, true, exp): genAsm(exp) + "++";
 			case EUnop(OpDecrement, true, exp): genAsm(exp) + "--";
+			case EUnop(OpNeg, false, exp): complic = false; "-" + genAsm(exp);
+			case EParenthesis(exp): genAsm(exp);
 			case EBinop(OpAssign, a, b):
 				if(!Generator.typeEq(Generator.typeOf(a, locals), Generator.typeOf(b, locals)))
 					Context.error("Incompatible types", e.pos);
@@ -301,16 +304,16 @@ class JSGenerator {
 			case EBinop(op, a, b):
 				var ta = Generator.typeOf(a, locals), tb = Generator.typeOf(b, locals);
 				if(!Generator.typeEq(ta, tb))
-					Context.error('Incompatible types $ta and $tb with $a and $b', e.pos);
-				genAsm(a, true) + getOp(op) + genAsm(b, true);
-			default: Generator.error('Could not compile ${e.toString()}', e.pos); "";
+					Context.error('Incompatible types ${ta.toString()} and ${tb.toString()} with ${a.toString()} and ${b.toString()}', e.pos);
+				genAsm(a, false) + getOp(op) + genAsm(b, false);
+			default: Generator.error('Could not compile ${e.toString()} ${e.expr}', e.pos); "";
 		};
 		as = StringTools.replace(as, ";;", ";");
 		return if(typeCheck) {
 			var format = switch(exprType) {
 				case TPath({name: "Int", pack: [], sub: _, params: []}): complic ? "($)|0" : "$|0";
 				case TPath({name: "Float", pack: [], sub: _, params: []}): complic ? "+($)" : "+$";
-				default: trace(e.toString());"$";
+				default: "$";
 			};
 			!annot ? as : StringTools.replace(format, "$", as); 
 		} else as;
