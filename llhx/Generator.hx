@@ -70,6 +70,8 @@ class Generator {
 			case EIf(_, eif, _): typeOf(eif, p);
 			case EFunction(_, f): ComplexType.TFunction([for(a in f.args) a.type == null ? typeOf(a.value, p) : a.type], f.ret == null ? typeOf(f.expr, p) : f.ret);
 			case EFor(eit, expr): void;
+			case ECall({expr: EField({expr: EConst(CIdent("Math"))}, _)}, _): macro:Float;
+			case EField({expr: EConst(CIdent("Math"))}, _): macro:Float;
 			case EField({expr: EConst(CIdent(i)), pos: _}, field) if( try Context.getType(i) != null catch(e:Dynamic) true): dynam;
 			default: void;
 			case EDisplayNew(_): void;
@@ -78,6 +80,7 @@ class Generator {
 			case EConst(CInt(v)): macro:Int;
 			case EConst(CFloat(f)): macro:Float;
 			case EConst(CString(s)): macro:String;
+			case EConst(CIdent("true") | CIdent("false")) | ECheckType(_, _): macro:Bool;
 			case EConst(CIdent(i)):
 				var daType = null;
 				for(v in p)
@@ -90,10 +93,8 @@ class Generator {
 				} catch(e:Dynamic) {}
 				daType == null ? error('No such variable "$i"', e.pos) : daType;
 			case EConst(CRegexp(r, opt)): macro:RegExp;
-			case ECheckType(e, t): macro:Bool;
 			case ECast(e, t) if(t == null): typeOf(e, p);
 			case ECast(e, t): t;
-			case ECall({expr: EField({expr: EConst(CIdent("Math")), pos: _}, _), pos: _}, _): macro:Float;
 			case ECall(f, params):
 				switch(typeOf(f, p)) {
 					case TFunction(_, ret): ret;

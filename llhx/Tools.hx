@@ -27,14 +27,14 @@ class Tools {
 		c = c.substr(0, pi.min);
 		return c.split("\n").length;
 	}
-	public static function toPosInfos(p:Position):haxe.PosInfos {
+	public static function toPosInfos(p:Position, ?lm:String):haxe.PosInfos {
 		var pi = haxe.macro.Context.getPosInfos(p);
 		var line = getLineInFile(p);
 		return {
 			lineNumber: line,
 			fileName: pi.file,
 			className: Context.getLocalClass().get().name,
-			methodName: Context.getLocalMethod()
+			methodName: lm != null ? lm : Context.getLocalMethod()
 		};
 	}
 }

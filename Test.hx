@@ -1,12 +1,11 @@
 import js.Browser.*;
 class Testy implements llhx.LowLevel {
-	//static var h = "Hello, world!";
-	public static function go() {
-		trace(Math.PI);
+	public static function circleArea(r:Float):Float {
+		return Math.PI * Math.pow(r, 2.0);
 	}
 }
 class Test {
 	public static function main() {
-		Testy.go();
+		trace(Testy.circleArea(16));
 	}
 }
