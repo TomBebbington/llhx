@@ -281,7 +281,10 @@ class JSGenerator {
 				var vari:Expr = {expr: EConst(CIdent(i)), pos: pos};
 				genAsm(macro {
 					$vars;
-					while($vari < $eb) $expr;
+					while($vari < $eb) {
+						$expr;
+						$vari++;
+					}
 				});
 			case ENew({name: "String", pack: [], params: []}, params):
 				'new ${STDLIB_NAME}.Uint8Array(${HEAP_NAME})';
@@ -306,7 +309,7 @@ class JSGenerator {
 				if(!Generator.typeEq(ta, tb))
 					Context.error('Incompatible types ${ta.toString()} and ${tb.toString()} with ${a.toString()} and ${b.toString()}', e.pos);
 				genAsm(a, false) + getOp(op) + genAsm(b, false);
-			default: Generator.error('Could not compile ${e.toString()} ${e.expr}', e.pos); "";
+			default: Context.error('Could not compile ${e.toString()} ${e.expr}', e.pos); "";
 		};
 		as = StringTools.replace(as, ";;", ";");
 		return if(typeCheck) {
@@ -318,32 +321,9 @@ class JSGenerator {
 			!annot ? as : StringTools.replace(format, "$", as); 
 		} else as;
 	}
-	function getOp(op:Binop) {
-		return switch(op) {
-			case OpXor: "^";
-			case OpUShr: ">>>";
-			case OpShr: ">>";
-			case OpShl: "<<";
-			case OpOr: "|";
-			case OpNotEq: "!=";
-			case OpMult: "*";
-			case OpMod: "%";
-			case OpLte: "<=";
-			case OpLt: "<";
-			case OpGte: ">=";
-			case OpGt: ">";
-			case OpEq: "==";
-			case OpInterval, OpArrow: throw "Unsupported";
-			case OpDiv: "/";
-			case OpBoolOr: "||";
-			case OpBoolAnd: "&&";
-			case OpAssign: "=";
-			case OpAnd: "&";
-			case OpSub: "-";
-			case OpAdd: "+";
-			case OpAssignOp(oop): getOp(oop)+"=";
-		}
-	}
+	static inline function getOp(op:Binop): String
+		return new haxe.macro.Printer().printBinop(op);
+
 	public function toExpr():Expr {
 		var s = new StringBuf();
 		s.add('(function(${STDLIB_NAME}, ${EXTERN_NAME}, ${HEAP_NAME}) {');
@@ -379,6 +359,7 @@ class JSGenerator {
 		var obj = [for(f in functionIds.keys()) '${functionIds.get(f)}: $f'].join(", ");
 		s.add('return {$obj};');
 		s.add("})");
+		trace(s.toString());
 		var funcExpr = macro untyped __js__($v{s.toString()});
 		var window = macro untyped __js__("window");
 		var obj =  {expr: EObjectDecl([for(k in externs.keys())

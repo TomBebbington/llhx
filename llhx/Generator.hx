@@ -3,6 +3,7 @@ import haxe.macro.*;
 import haxe.macro.Expr;
 import haxe.macro.Type;
 using haxe.macro.ExprTools;
+using haxe.macro.TypeTools;
 class Generator {
 	public static inline var IDENTIFIER = "getGenerated";
 	public static function toTypePath(cp:ClassType):TypePath {
@@ -14,7 +15,7 @@ class Generator {
 		};
 	}
 	public static function gen():Array<Field> {
-		return if(Context.defined("js") && !Context.defined("no-asm"))
+		return if(Context.defined("js") && !Context.defined("no-asm") && !Context.defined("debug"))
 			llhx.js.JSGenerator.gen();
 		else Context.getBuildFields();
 	}
@@ -48,12 +49,24 @@ class Generator {
 		};
 	}
 	public static function typeOf(e:Expr, p:Array<Var>):ComplexType {
+		/*trace("typing " + e.toString());
+		return Context.typeof({
+			expr:
+				EBlock([
+					{
+						expr: EVars(vars),
+						pos: e.pos
+					},
+					e
+				]),
+			pos: e.pos
+		}).toComplexType();*/
 		var void = macro:Void;
 		var dynam = macro:Dynamic;
 		return switch(e.expr) {
 			case EWhile(_, _, _): void;
 			case EVars(vs): for(v in vs) p.push(v); void;
-			case EUntyped(o): trace(e); trace(o); dynam;
+			case EUntyped(o): dynam;
 			case EUnop(_, _, e): typeOf(e, p);
 			case ETry(e, _): typeOf(e, p);
 			case EThrow(e): void;
@@ -91,7 +104,7 @@ class Generator {
 				try {
 					daType = Context.toComplexType(Context.getType(i));
 				} catch(e:Dynamic) {}
-				daType == null ? error('No such variable "$i"', e.pos) : daType;
+				daType == null ? Context.error('No such variable "$i"', e.pos) : daType;
 			case EConst(CRegexp(r, opt)): macro:RegExp;
 			case ECast(e, t) if(t == null): typeOf(e, p);
 			case ECast(e, t): t;
@@ -120,17 +133,28 @@ class Generator {
 	}
 	static function map(e:Expr):Expr {
 		return switch(e.expr) {
-			case EConst(CIdent("true")): {expr: EConst(CInt("1")), pos: e.pos};
-			case EConst(CIdent("false")): {expr: EConst(CInt("0")), pos: e.pos};
-			case EConst(CIdent("null")): error("Null is not allowed", e.pos);
-			case EConst(CString(s)): {expr: EArrayDecl([for(i in 0...s.length) Context.makeExpr(s.charCodeAt(i), e.pos)]), pos: e.pos};
+			case ExprDef.EConst(Constant.CRegexp):
+				Context.error("Regular expressions are not allowed in a low-level function", e.pos);
+				null;
+			case EConst(CIdent("true")):
+				{
+					expr: EConst(CInt("1")),
+					pos: e.pos
+				};
+			case EConst(CIdent("false")):
+				{
+					expr: EConst(CInt("0")),
+					pos: e.pos
+				};
+			case EConst(CIdent("null")):
+				Context.error("Null is not allowed in a low-level function", e.pos);
+				null;
+			case EConst(CString(s)):
+				{
+					expr: EArrayDecl([for(i in 0...s.length) Context.makeExpr(s.charCodeAt(i), e.pos)]),
+					pos: e.pos
+				};
 			default: e;
 		};
-	}
-	public static inline function error(s:String, p:Position):Dynamic {
-		var pi = Context.getPosInfos(p);
-		Sys.println('${pi.file}:${Tools.getLineInFile(p)} - $s');
-		Sys.exit(1);
-		return null;
 	}
 }

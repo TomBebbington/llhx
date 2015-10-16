@@ -1,6 +1,12 @@
 import js.Browser.*;
 import js.html.*;
 class CircleTools implements llhx.LowLevel {
+	public static function factorial(num: Int): Int {
+		var product = 1;
+		for(i in 2...num)
+			product *= i;
+		return product;
+	}
 	public static function area(r:Float):Float {
 		return Math.PI * r * r;
 	}
@@ -26,6 +32,7 @@ class Test {
 			//canvas = cast document.getElementById("draw");
 			//context = canvas.getContext2d();
 			window.requestAnimationFrame(update);
+		trace(CircleTools.factorial(10));
 		});
 	}
 	static function update(d:Float) {
